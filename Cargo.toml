@@ -1,0 +1,9 @@
+[package]
+name = "ddl-diff"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.26", features = ["derive"] }
+sqlx = { version = "0.8.3", features = ["runtime-tokio", "mysql"] }
+tokio = { version = "1.43.0", features = ["rt", "rt-multi-thread", "macros"] }
