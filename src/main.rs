@@ -234,6 +234,14 @@ fn generate_column(column: &Column) -> String {
 }
 
 fn generate_create_index(index: &Index) -> String {
+    if "PRIMARY" == index.index_name {
+        return format!(
+            "ALTER TABLE {} ADD PRIMARY KEY ({});",
+            index.table_name,
+            index.column_names.join(", ")
+        );
+    }
+
     format!(
         "CREATE {}INDEX {} ON {} ({});",
         if index.non_unique { "" } else { "UNIQUE " },
@@ -341,6 +349,7 @@ async fn main() {
     ddl_statements.extend(compare_indexes(&original_indexes, &target_indexes));
 
     for ddl in ddl_statements {
+        println!("use {};", &args.target_schema);
         println!("{}", ddl);
     }
 }
