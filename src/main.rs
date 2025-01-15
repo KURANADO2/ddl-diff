@@ -49,6 +49,11 @@ struct Index {
     column_names: Vec<String>,
 }
 
+struct ColumnResult {
+    ddl_statements: Vec<String>,
+    deleted_tables: Vec<String>,
+}
+
 async fn get_columns(pool: &MySqlPool, schema: &str) -> Vec<Column> {
     let query = format!(
         "SELECT
@@ -114,8 +119,8 @@ async fn get_indexes(pool: &MySqlPool, schema: &str) -> Vec<Index> {
         .collect()
 }
 
-fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>) -> (Vec<String>, Vec<String>) {
-    let mut result = Vec::new();
+fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>) -> ColumnResult {
+    let mut ddl_statements = Vec::new();
 
     // group columns by table name
     let original = group_column_by_table(original_columns);
@@ -131,24 +136,24 @@ fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>)
                 for (original_column_name, original_column_detail) in original_columns.iter() {
                     // Field does not exist
                     if !target_columns.contains_key(original_column_name) {
-                        result.push(generate_add_column(&original_column_detail));
+                        ddl_statements.push(generate_add_column(&original_column_detail));
                         // Field exists, but the field attributes are different
                     } else if !compare_column_attr(
                         &target_columns[original_column_name],
                         original_column_detail,
                     ) {
-                        result.push(generate_modify_column(&original_column_detail));
+                        ddl_statements.push(generate_modify_column(&original_column_detail));
                     }
                 }
                 for (target_column_name, target_column_detail) in target_columns.iter() {
                     if !original_columns.contains_key(target_column_name) {
-                        result.push(generate_drop_column(target_column_detail));
+                        ddl_statements.push(generate_drop_column(target_column_detail));
                     }
                 }
             }
             None => {
                 // Table does not exist
-                result.push(generate_create_table(&table_name, original_columns));
+                ddl_statements.push(generate_create_table(&table_name, original_columns));
             }
         }
     }
@@ -158,11 +163,14 @@ fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>)
     for table in target.keys() {
         if !original.contains_key(table) {
             deleted_tables.push(table.clone());
-            result.push(format!("DROP TABLE {};", table));
+            ddl_statements.push(format!("DROP TABLE {};", table));
         }
     }
 
-    (result, deleted_tables)
+    ColumnResult {
+        ddl_statements,
+        deleted_tables,
+    }
 }
 
 fn compare_indexes(
@@ -347,15 +355,22 @@ async fn main() {
     let original_columns = get_columns(&original_pool, &args.original_schema).await;
     let target_columns = get_columns(&target_pool, &args.target_schema).await;
 
-    let mut ddl_statements = compare_columns(&original_columns, &target_columns);
+    let mut column_result = compare_columns(&original_columns, &target_columns);
 
     let original_indexes = get_indexes(&original_pool, &args.original_schema).await;
     let target_indexes = get_indexes(&original_pool, &args.target_schema).await;
 
-    ddl_statements.0.extend(compare_indexes(&original_indexes, &target_indexes, &ddl_statements.1));
+    column_result.ddl_statements.extend(compare_indexes(
+        &original_indexes,
+        &target_indexes,
+        &column_result.deleted_tables,
+    ));
 
-    println!("use {};", &args.target_schema);
-    for ddl in ddl_statements.0 {
+    if column_result.ddl_statements.len() > 0 {
+        println!("use {};", &args.target_schema);
+    }
+
+    for ddl in column_result.ddl_statements {
         println!("{}", ddl);
     }
 }
