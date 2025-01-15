@@ -1,7 +1,59 @@
-## create database a_schema
+A tool to compare two databases and generate a diff for MySQL.
+
+## Install
+
+### Cargo
+
+```bash
+$ cargo install ddl-diff
+```
+
+### From Source
+
+```bash
+$ git clone git@github.com:KURANADO2/ddl-diff.git
+$ cd ddl-diff
+$ cargo build --release
+```
+
+Then you can use the binary in `target/release/ddl-diff` or add it to your PATH.
+
+## Options
+
+```bash
+$ ddl-diff -h                                                                                                                                                                                                                 base  20:56:22
+A tool to compare two databases and generate a diff for MySQL.
+
+Usage: ddl-diff [OPTIONS] --original-user <ORIGINAL_USER> --original-password <ORIGINAL_PASSWORD> --original-host <ORIGINAL_HOST> --original-schema <ORIGINAL_SCHEMA> --target-user <TARGET_USER> --target-password <TARGET_PASSWORD> --target-host <TARGET_HOST> --target-schema <TARGET_SCHEMA>
+
+Options:
+      --original-user <ORIGINAL_USER>          
+      --original-password <ORIGINAL_PASSWORD>  
+      --original-host <ORIGINAL_HOST>          
+      --original-port <ORIGINAL_PORT>          [default: 3306]
+      --original-schema <ORIGINAL_SCHEMA>      
+      --target-user <TARGET_USER>              
+      --target-password <TARGET_PASSWORD>      
+      --target-host <TARGET_HOST>              
+      --target-port <TARGET_PORT>              [default: 3306]
+      --target-schema <TARGET_SCHEMA>          
+  -h, --help                                   Print help
+  -V, --version                                Print version
+```
+
+## Usage
+
+```bash
+$ ddl-diff --original-user root --original-password 123456 --original-host 127.0.0.1 --original-schema a_schema --target-user root --target-password 123456 --target-host 127.0.0.1 --target-schema b_schema
+```
+
+Then it will be output some content about the difference between two database.
+
+## Example
+
+### create database a_schema
 
 ```mysql
-## a schema
 drop database a_schema;
 create database a_schema;
 
@@ -29,10 +81,11 @@ create table course
 );
 ```
 
-## b schema same with a schema
+### create b_schema
+
+The b_schema is the same with a_schema.
 
 ```mysql
-# b schema same with a schema
 drop database b_schema;
 create database b_schema;
 
@@ -60,24 +113,17 @@ create table course
 );
 ```
 
-## make the difference between a_schema and b_schema
+### make the difference between a_schema and b_schema
 
 ```mysql
 use a_schema;
-alter table user
-    add column age int null comment '年龄';
-alter table user
-    add column create_time datetime not null default current_timestamp comment '创建时间';
-alter table user
-    modify column address varchar(100) not null comment '地址';
-alter table user
-    change column number phone varchar(20) null comment '电话号码';
-alter table user
-    drop column height;
-alter table user
-    add unique index uk_phone (phone);
-alter table user
-    drop index idx_name;
+alter table user add column age int null comment '年龄';
+alter table user add column create_time datetime not null default current_timestamp comment '创建时间';
+alter table user modify column address varchar(100) not null comment '地址';
+alter table user change column number phone varchar(20) null comment '电话号码';
+alter table user drop column height;
+alter table user add unique index uk_phone (phone);
+alter table user drop index idx_name;
 create table student
 (
     id   bigint primary key auto_increment comment '主键',
@@ -90,28 +136,15 @@ create index idx_multiple_filed on user (name, phone);
 drop table course;
 ```
 
-## Usage example
+### Run the program
 
 ```bash
-$ cargo build --release
-$ target/release/ddl-diff -h                                                                                                                                                 48s  base  21:21:05 ↔ 127.0.0.1:7890
-Usage: ddl-diff [OPTIONS] --original-user <ORIGINAL_USER> --original-password <ORIGINAL_PASSWORD> --original-host <ORIGINAL_HOST> --original-schema <ORIGINAL_SCHEMA> --target-user <TARGET_USER> --target-password <TARGET_PASSWORD> --target-host <TARGET_HOST> --target-schema <TARGET_SCHEMA>
+$ ddl-diff --original-user root --original-password 123456 --original-host 127.0.0.1 --original-schema a_schema --target-user root --target-password 123456 --target-host 127.0.0.1 --target-schema b_schema
+```
 
-Options:
-      --original-user <ORIGINAL_USER>          
-      --original-password <ORIGINAL_PASSWORD>  
-      --original-host <ORIGINAL_HOST>          
-      --original-port <ORIGINAL_PORT>          [default: 3306]
-      --original-schema <ORIGINAL_SCHEMA>      
-      --target-user <TARGET_USER>              
-      --target-password <TARGET_PASSWORD>      
-      --target-host <TARGET_HOST>              
-      --target-port <TARGET_PORT>              [default: 3306]
-      --target-schema <TARGET_SCHEMA>          
-  -h, --help                                   Print help
-  -V, --version                                Print version
-$ target/release/ddl-diff --original-user root --original-password 123456 --original-host 127.0.0.1 --original-schema a_schema --target-user root --target-password 123456 --target-host 127.0.0.1 --target-schema b_schema
+Output the following:
 
+```mysql
 use b_schema;
 CREATE TABLE student(
 name varchar(30) NULL  COMMENT '姓名',
