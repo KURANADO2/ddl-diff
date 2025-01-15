@@ -1,7 +1,6 @@
-create database a_schema;
+## create database a_schema;
 
-# init
-
+```mysql
 use a_schema;
 
 create table user (
@@ -24,9 +23,11 @@ name varchar(30) null comment '课程名称',
 teacher varchar(30) null comment '教师',
 credit float null comment '学分'
 );
+```
 
-# b schema same with a schema
+## b schema same with a schema
 
+```mysql
 create database a_schema;
 
 use b_schema;
@@ -49,9 +50,11 @@ name    varchar(30) null comment '课程名称',
 teacher varchar(30) null comment '教师',
 credit  float       null comment '学分'
 );
+```
 
-# make the difference between a_schema and b_schema
+## make the difference between a_schema and b_schema
 
+```mysql
 use a_schema;
 alter table user add column age int null comment '年龄';
 alter table user add column create_time datetime not null default current_timestamp comment '创建时间';
@@ -69,6 +72,7 @@ create unique index uk_no on student(no);
 drop index idx_multiple_field on user;
 create index idx_multiple_filed on user(name, phone);
 drop table course;
+```
 
 ## Usage example
 
@@ -112,4 +116,3 @@ DROP INDEX idx_name ON user;
 DROP INDEX PRIMARY ON course;
 DROP INDEX idx_multiple_field ON user;
 ```
-
