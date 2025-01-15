@@ -1,8 +1,8 @@
 [package]
 name = "ddl-diff"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-description = "A tool to compare two databases and generate a diff file for MySQL."
+description = "A tool to compare two databases and generate a diff for MySQL."
 license = "MIT"
 
 [dependencies]
