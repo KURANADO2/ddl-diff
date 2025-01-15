@@ -2,6 +2,8 @@
 name = "ddl-diff"
 version = "0.1.0"
 edition = "2021"
+description = "A tool to compare two databases and generate a diff file for MySQL."
+license = "MIT"
 
 [dependencies]
 clap = { version = "4.5.26", features = ["derive"] }
