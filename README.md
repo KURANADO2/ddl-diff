@@ -1,43 +1,47 @@
 ## create database a_schema;
 
 ```mysql
+## a schema
+drop database a_schema;
+create database a_schema;
+
 use a_schema;
 
 create table user (
-id bigint primary key auto_increment comment '主键',
-name varchar(30) null comment '姓名',
-address varchar(50) null comment '地址',
-number varchar(20) null comment '编号',
-height float null comment '身高'
+                      id bigint primary key auto_increment comment '主键',
+                      name varchar(30) null comment '姓名',
+                      address varchar(50) null comment '地址',
+                      number varchar(20) null comment '编号',
+                      height float null comment '身高'
 );
 
 create index idx_name on user(name);
 
 create index idx_multiple_field on user(name, address);
 
-create database b_schema;
-
 create table course (
-id bigint primary key auto_increment comment '主键',
-name varchar(30) null comment '课程名称',
-teacher varchar(30) null comment '教师',
-credit float null comment '学分'
+                        id      bigint primary key auto_increment comment '主键',
+                        name    varchar(30) null comment '课程名称',
+                        teacher varchar(30) null comment '教师',
+                        credit  float       null comment '学分'
 );
 ```
 
 ## b schema same with a schema
 
 ```mysql
-create database a_schema;
+# b schema same with a schema
+drop database b_schema;
+create database b_schema;
 
 use b_schema;
 
 create table user (
-id bigint primary key auto_increment comment '主键',
-name varchar(30) null comment '姓名',
-address varchar(50) null comment '地址',
-number varchar(20) null comment '编号',
-height float null comment '身高'
+                      id bigint primary key auto_increment comment '主键',
+                      name varchar(30) null comment '姓名',
+                      address varchar(50) null comment '地址',
+                      number varchar(20) null comment '编号',
+                      height float null comment '身高'
 );
 
 create index idx_name on user(name);
@@ -45,10 +49,10 @@ create index idx_name on user(name);
 create index idx_multiple_field on user(name, address);
 
 create table course (
-id      bigint primary key auto_increment comment '主键',
-name    varchar(30) null comment '课程名称',
-teacher varchar(30) null comment '教师',
-credit  float       null comment '学分'
+                        id      bigint primary key auto_increment comment '主键',
+                        name    varchar(30) null comment '课程名称',
+                        teacher varchar(30) null comment '教师',
+                        credit  float       null comment '学分'
 );
 ```
 
@@ -64,9 +68,9 @@ alter table user drop column height;
 alter table user add unique index uk_phone(phone);
 alter table user drop index idx_name;
 create table student(
-id bigint primary key auto_increment comment '主键',
-no varchar(30) null comment '学号',
-name varchar(30) null comment '姓名'
+                        id bigint primary key auto_increment comment '主键',
+                        no varchar(30) null comment '学号',
+                        name varchar(30) null comment '姓名'
 );
 create unique index uk_no on student(no);
 drop index idx_multiple_field on user;
@@ -96,23 +100,23 @@ Options:
   -V, --version                                Print version
 $ target/release/ddl-diff --original-user root --original-password 123456 --original-host 127.0.0.1 --original-schema a_schema --target-user root --target-password 123456 --target-host 127.0.0.1 --target-schema b_schema
 
-ALTER TABLE user ADD COLUMN phone varchar(20) NULL  COMMENT '电话号码';
-ALTER TABLE user MODIFY COLUMN address varchar(100) NOT NULL  COMMENT '地址';
-ALTER TABLE user ADD COLUMN age int NULL  COMMENT '年龄';
-ALTER TABLE user ADD COLUMN create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间';
-ALTER TABLE user DROP COLUMN number;
-ALTER TABLE user DROP COLUMN height;
+use b_schema;
 CREATE TABLE student(
 name varchar(30) NULL  COMMENT '姓名',
-no varchar(30) NULL  COMMENT '学号',
-id bigint NOT NULL  COMMENT '主键'
+id bigint NOT NULL  COMMENT '主键',
+no varchar(30) NULL  COMMENT '学号'
 );
+ALTER TABLE user ADD COLUMN create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间';
+ALTER TABLE user ADD COLUMN age int NULL  COMMENT '年龄';
+ALTER TABLE user MODIFY COLUMN address varchar(100) NOT NULL  COMMENT '地址';
+ALTER TABLE user ADD COLUMN phone varchar(20) NULL  COMMENT '电话号码';
+ALTER TABLE user DROP COLUMN height;
+ALTER TABLE user DROP COLUMN number;
 DROP TABLE course;
-CREATE UNIQUE INDEX PRIMARY ON student (id);
-CREATE UNIQUE INDEX uk_no ON student (no);
 CREATE UNIQUE INDEX uk_phone ON user (phone);
+CREATE UNIQUE INDEX uk_no ON student (no);
 CREATE INDEX idx_multiple_filed ON user (name, phone);
-DROP INDEX idx_name ON user;
-DROP INDEX PRIMARY ON course;
+ALTER TABLE student ADD PRIMARY KEY (id);
 DROP INDEX idx_multiple_field ON user;
+DROP INDEX idx_name ON user;
 ```
