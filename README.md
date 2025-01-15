@@ -51,7 +51,7 @@ Then it will be output some content about the difference between two database.
 
 ## Example
 
-### create database a_schema
+### create a_schema
 
 ```mysql
 drop database a_schema;
