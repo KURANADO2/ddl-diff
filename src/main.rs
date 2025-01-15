@@ -114,7 +114,7 @@ async fn get_indexes(pool: &MySqlPool, schema: &str) -> Vec<Index> {
         .collect()
 }
 
-fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>) -> Vec<String> {
+fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>) -> (Vec<String>, Vec<String>) {
     let mut result = Vec::new();
 
     // group columns by table name
@@ -153,17 +153,23 @@ fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>)
         }
     }
 
+    let mut deleted_tables = Vec::new();
     // The table is being deleted
     for table in target.keys() {
         if !original.contains_key(table) {
+            deleted_tables.push(table.clone());
             result.push(format!("DROP TABLE {};", table));
         }
     }
 
-    result
+    (result, deleted_tables)
 }
 
-fn compare_indexes(original_indexes: &Vec<Index>, target_indexes: &Vec<Index>) -> Vec<String> {
+fn compare_indexes(
+    original_indexes: &Vec<Index>,
+    target_indexes: &Vec<Index>,
+    deleted_tables: &Vec<String>,
+) -> Vec<String> {
     let mut result = Vec::new();
 
     let original = group_index_by_table_index(original_indexes);
@@ -184,7 +190,7 @@ fn compare_indexes(original_indexes: &Vec<Index>, target_indexes: &Vec<Index>) -
     }
 
     for (key, target_index) in &target {
-        if !original.contains_key(key) {
+        if !original.contains_key(key) && !deleted_tables.contains(&target_index.table_name) {
             result.push(generate_drop_index(target_index));
         }
     }
@@ -346,10 +352,10 @@ async fn main() {
     let original_indexes = get_indexes(&original_pool, &args.original_schema).await;
     let target_indexes = get_indexes(&original_pool, &args.target_schema).await;
 
-    ddl_statements.extend(compare_indexes(&original_indexes, &target_indexes));
+    ddl_statements.0.extend(compare_indexes(&original_indexes, &target_indexes, &ddl_statements.1));
 
-    for ddl in ddl_statements {
-        println!("use {};", &args.target_schema);
+    println!("use {};", &args.target_schema);
+    for ddl in ddl_statements.0 {
         println!("{}", ddl);
     }
 }
