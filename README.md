@@ -1,4 +1,4 @@
-## create database a_schema;
+## create database a_schema
 
 ```mysql
 ## a schema
@@ -7,23 +7,25 @@ create database a_schema;
 
 use a_schema;
 
-create table user (
-                      id bigint primary key auto_increment comment '主键',
-                      name varchar(30) null comment '姓名',
-                      address varchar(50) null comment '地址',
-                      number varchar(20) null comment '编号',
-                      height float null comment '身高'
+create table user
+(
+    id      bigint primary key auto_increment comment '主键',
+    name    varchar(30) null comment '姓名',
+    address varchar(50) null comment '地址',
+    number  varchar(20) null comment '编号',
+    height  float       null comment '身高'
 );
 
-create index idx_name on user(name);
+create index idx_name on user (name);
 
-create index idx_multiple_field on user(name, address);
+create index idx_multiple_field on user (name, address);
 
-create table course (
-                        id      bigint primary key auto_increment comment '主键',
-                        name    varchar(30) null comment '课程名称',
-                        teacher varchar(30) null comment '教师',
-                        credit  float       null comment '学分'
+create table course
+(
+    id      bigint primary key auto_increment comment '主键',
+    name    varchar(30) null comment '课程名称',
+    teacher varchar(30) null comment '教师',
+    credit  float       null comment '学分'
 );
 ```
 
@@ -36,23 +38,25 @@ create database b_schema;
 
 use b_schema;
 
-create table user (
-                      id bigint primary key auto_increment comment '主键',
-                      name varchar(30) null comment '姓名',
-                      address varchar(50) null comment '地址',
-                      number varchar(20) null comment '编号',
-                      height float null comment '身高'
+create table user
+(
+    id      bigint primary key auto_increment comment '主键',
+    name    varchar(30) null comment '姓名',
+    address varchar(50) null comment '地址',
+    number  varchar(20) null comment '编号',
+    height  float       null comment '身高'
 );
 
-create index idx_name on user(name);
+create index idx_name on user (name);
 
-create index idx_multiple_field on user(name, address);
+create index idx_multiple_field on user (name, address);
 
-create table course (
-                        id      bigint primary key auto_increment comment '主键',
-                        name    varchar(30) null comment '课程名称',
-                        teacher varchar(30) null comment '教师',
-                        credit  float       null comment '学分'
+create table course
+(
+    id      bigint primary key auto_increment comment '主键',
+    name    varchar(30) null comment '课程名称',
+    teacher varchar(30) null comment '教师',
+    credit  float       null comment '学分'
 );
 ```
 
@@ -60,21 +64,29 @@ create table course (
 
 ```mysql
 use a_schema;
-alter table user add column age int null comment '年龄';
-alter table user add column create_time datetime not null default current_timestamp comment '创建时间';
-alter table user modify column address varchar(100) not null comment '地址';
-alter table user change column number phone varchar(20) null comment '电话号码';
-alter table user drop column height;
-alter table user add unique index uk_phone(phone);
-alter table user drop index idx_name;
-create table student(
-                        id bigint primary key auto_increment comment '主键',
-                        no varchar(30) null comment '学号',
-                        name varchar(30) null comment '姓名'
+alter table user
+    add column age int null comment '年龄';
+alter table user
+    add column create_time datetime not null default current_timestamp comment '创建时间';
+alter table user
+    modify column address varchar(100) not null comment '地址';
+alter table user
+    change column number phone varchar(20) null comment '电话号码';
+alter table user
+    drop column height;
+alter table user
+    add unique index uk_phone (phone);
+alter table user
+    drop index idx_name;
+create table student
+(
+    id   bigint primary key auto_increment comment '主键',
+    no   varchar(30) null comment '学号',
+    name varchar(30) null comment '姓名'
 );
-create unique index uk_no on student(no);
+create unique index uk_no on student (no);
 drop index idx_multiple_field on user;
-create index idx_multiple_filed on user(name, phone);
+create index idx_multiple_filed on user (name, phone);
 drop table course;
 ```
 
@@ -120,3 +132,17 @@ ALTER TABLE student ADD PRIMARY KEY (id);
 DROP INDEX idx_multiple_field ON user;
 DROP INDEX idx_name ON user;
 ```
+
+## Note
+
+If you take a closer look at the output above, you’ll notice that the program fails to correctly identify cases where
+field names have been modified. This is because MySQL’s information_schema does not store a unique ID for fields, making
+it impossible to distinguish between a field being renamed and a field being deleted and a new one added. The same issue
+applies to table name changes.
+
+One possible solution is to calculate the edit distance of field properties, but this method is not always accurate.
+If you use table structure comparison features in tools like Navicat or DataGrip, you’ll find that they also cannot
+handle such situations.
+
+Therefore, when using this program, be sure to manually verify the output for correctness before executing the SQL
+statements.
