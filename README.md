@@ -122,17 +122,16 @@ alter table user add column create_time datetime not null default current_timest
 alter table user modify column address varchar(100) not null comment '地址';
 alter table user change column number phone varchar(20) null comment '电话号码';
 alter table user drop column height;
-alter table user add unique index uk_phone (phone);
+alter table user add unique index uk_phone(phone);
 alter table user drop index idx_name;
-create table student
-(
-    id   bigint primary key auto_increment comment '主键',
-    no   varchar(30) null comment '学号',
-    name varchar(30) null comment '姓名'
+create table student(
+                        id bigint primary key auto_increment comment '主键',
+                        no varchar(30) null comment '学号',
+                        name varchar(30) null comment '姓名'
 );
-create unique index uk_no on student (no);
+create unique index uk_no on student(no);
 drop index idx_multiple_field on user;
-create index idx_multiple_filed on user (name, phone);
+create index idx_multiple_field on user(name, phone);
 drop table course;
 ```
 
@@ -147,22 +146,22 @@ Output the following:
 ```mysql
 use b_schema;
 CREATE TABLE student(
-name varchar(30) NULL  COMMENT '姓名',
-id bigint NOT NULL  COMMENT '主键',
-no varchar(30) NULL  COMMENT '学号'
+                        id bigint NOT NULL  COMMENT '主键',
+                        name varchar(30) NULL  COMMENT '姓名',
+                        no varchar(30) NULL  COMMENT '学号'
 );
-ALTER TABLE user ADD COLUMN create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间';
-ALTER TABLE user ADD COLUMN age int NULL  COMMENT '年龄';
 ALTER TABLE user MODIFY COLUMN address varchar(100) NOT NULL  COMMENT '地址';
+ALTER TABLE user ADD COLUMN age int NULL  COMMENT '年龄';
+ALTER TABLE user ADD COLUMN create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间';
 ALTER TABLE user ADD COLUMN phone varchar(20) NULL  COMMENT '电话号码';
-ALTER TABLE user DROP COLUMN height;
 ALTER TABLE user DROP COLUMN number;
+ALTER TABLE user DROP COLUMN height;
 DROP TABLE course;
-CREATE UNIQUE INDEX uk_phone ON user (phone);
-CREATE UNIQUE INDEX uk_no ON student (no);
-CREATE INDEX idx_multiple_filed ON user (name, phone);
 ALTER TABLE student ADD PRIMARY KEY (id);
 DROP INDEX idx_multiple_field ON user;
+CREATE INDEX idx_multiple_field ON user (name, phone);
+CREATE UNIQUE INDEX uk_phone ON user (phone);
+CREATE UNIQUE INDEX uk_no ON student (no);
 DROP INDEX idx_name ON user;
 ```
 
