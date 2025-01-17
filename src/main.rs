@@ -358,7 +358,7 @@ async fn main() {
     let mut column_result = compare_columns(&original_columns, &target_columns);
 
     let original_indexes = get_indexes(&original_pool, &args.original_schema).await;
-    let target_indexes = get_indexes(&original_pool, &args.target_schema).await;
+    let target_indexes = get_indexes(&target_pool, &args.target_schema).await;
 
     column_result.ddl_statements.extend(compare_indexes(
         &original_indexes,
