@@ -1,4 +1,5 @@
 use clap::Parser;
+use serde::Serialize;
 use sqlx::mysql::MySqlPool;
 use sqlx::Row;
 use std::collections::HashMap;
@@ -29,7 +30,14 @@ struct DbConfig {
     target_schema: String,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize)]
+struct Table {
+    table_name: String,
+    columns: Vec<Column>,
+    indexes: Vec<Index>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 struct Column {
     table_name: String,
     column_name: String,
@@ -41,18 +49,17 @@ struct Column {
     column_comment: String,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 struct Index {
     table_name: String,
     index_name: String,
     non_unique: bool,
     column_names: Vec<String>,
+    index_type: String,
+    extra: String,
 }
 
-struct ColumnResult {
-    ddl_statements: Vec<String>,
-    deleted_tables: Vec<String>,
-}
+struct AutoIncrementColumn {}
 
 async fn get_columns(pool: &MySqlPool, schema: &str) -> Vec<Column> {
     let query = format!(
@@ -79,12 +86,17 @@ async fn get_columns(pool: &MySqlPool, schema: &str) -> Vec<Column> {
 
 async fn get_indexes(pool: &MySqlPool, schema: &str) -> Vec<Index> {
     let query = format!(
-        "SELECT TABLE_NAME as table_name,
-         INDEX_NAME as index_name,
-         NON_UNIQUE as non_unique,
-         COLUMN_NAME as column_name
-         FROM information_schema.statistics
-         WHERE TABLE_SCHEMA = '{}' ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;",
+        "SELECT
+         t1.TABLE_NAME AS table_name,
+         t1.INDEX_NAME AS index_name,
+         t1.NON_UNIQUE AS non_unique,
+         t1.COLUMN_NAME AS column_name,
+         CAST(t1.INDEX_TYPE AS CHAR) AS index_type,
+         t2.extra AS extra
+         FROM INFORMATION_SCHEMA.STATISTICS t1
+         INNER JOIN INFORMATION_SCHEMA.COLUMNS t2
+         ON t1.TABLE_SCHEMA = t2.TABLE_SCHEMA AND t1.TABLE_NAME = t2.TABLE_NAME AND t1.COLUMN_NAME = t2.COLUMN_NAME
+         WHERE t1.TABLE_SCHEMA = '{}' ORDER BY t1.TABLE_NAME, t1.INDEX_NAME, t1.SEQ_IN_INDEX;",
         schema
     );
 
@@ -94,144 +106,323 @@ async fn get_indexes(pool: &MySqlPool, schema: &str) -> Vec<Index> {
         .await
         .unwrap();
 
-    let mut map: HashMap<(String, String), (bool, Vec<String>)> = HashMap::new();
+    let mut map: HashMap<(String, String), (bool, Vec<String>, String, String)> = HashMap::new();
 
     for row in rows {
         let table_name: String = row.get(0);
         let index_name: String = row.get(1);
         let non_unique: bool = row.get::<i8, _>(2) == 1;
         let column_name: String = row.get(3);
+        let index_type: String = row.get(4);
+        let extra: String = row.get(5);
 
         let key = (table_name.clone(), index_name.clone());
-        let value = map.entry(key).or_insert((non_unique, Vec::new()));
+        let value = map
+            .entry(key)
+            .or_insert((non_unique, Vec::new(), index_type, extra));
         value.1.push(column_name);
     }
 
     map.into_iter()
         .map(
-            |((table_name, index_name), (non_unique, column_names))| Index {
+            |((table_name, index_name), (non_unique, column_names, index_type, extra))| Index {
                 table_name,
                 index_name,
                 non_unique,
                 column_names,
+                index_type,
+                extra,
             },
         )
         .collect()
 }
 
-fn compare_columns(original_columns: &Vec<Column>, target_columns: &Vec<Column>) -> ColumnResult {
-    let mut ddl_statements = Vec::new();
+async fn get_tables(pool: &MySqlPool, schema: &str) -> Vec<Table> {
+    let mut result: Vec<Table> = Vec::new();
 
-    // group columns by table name
-    let original = group_column_by_table(original_columns);
-    let target = group_column_by_table(target_columns);
+    let columns = get_columns(pool, schema).await;
+    let columns = group_columns(columns);
 
-    // Traversal original columns
-    for (table_name, original_columns) in original.iter() {
-        // Get the same table from target tables
-        match target.get(table_name) {
-            // Table exists
-            Some(target_columns) => {
-                // Compare fields
-                for (original_column_name, original_column_detail) in original_columns.iter() {
-                    // Field does not exist
-                    if !target_columns.contains_key(original_column_name) {
-                        ddl_statements.push(generate_add_column(&original_column_detail));
-                        // Field exists, but the field attributes are different
-                    } else if !compare_column_attr(
-                        &target_columns[original_column_name],
-                        original_column_detail,
-                    ) {
-                        ddl_statements.push(generate_modify_column(&original_column_detail));
-                    }
-                }
-                for (target_column_name, target_column_detail) in target_columns.iter() {
-                    if !original_columns.contains_key(target_column_name) {
-                        ddl_statements.push(generate_drop_column(target_column_detail));
-                    }
-                }
-            }
-            None => {
-                // Table does not exist
-                ddl_statements.push(generate_create_table(&table_name, original_columns));
-            }
-        }
+    let indexes = get_indexes(pool, schema).await;
+    let indexes = group_indexes(indexes);
+
+    for (table_name, columns) in columns {
+        let indexes = indexes.get(&table_name).unwrap_or(&Vec::new()).clone();
+        result.push(Table {
+            table_name,
+            columns,
+            indexes,
+        });
     }
 
-    let mut deleted_tables = Vec::new();
-    // The table is being deleted
-    for table in target.keys() {
-        if !original.contains_key(table) {
-            deleted_tables.push(table.clone());
-            ddl_statements.push(format!("DROP TABLE {};", table));
-        }
-    }
-
-    ColumnResult {
-        ddl_statements,
-        deleted_tables,
-    }
+    result
 }
 
-fn compare_indexes(
-    original_indexes: &Vec<Index>,
-    target_indexes: &Vec<Index>,
-    deleted_tables: &Vec<String>,
-) -> Vec<String> {
-    let mut result = Vec::new();
+fn map_tables(tables: Vec<Table>) -> HashMap<String, Table> {
+    let mut result: HashMap<String, Table> = HashMap::new();
 
-    let original = group_index_by_table_index(original_indexes);
-    let target = group_index_by_table_index(target_indexes);
+    for table in tables {
+        result
+            .entry(table.table_name.clone())
+            .or_insert_with(|| table);
+    }
 
-    for (key, original_index) in original.iter() {
-        if !target.contains_key(key) {
-            result.push(generate_create_index(original_index));
-        } else if let Some(target_index) = target.get(key) {
-            // The index attr has difference
-            if original_index.column_names != target_index.column_names
-                || original_index.non_unique != target_index.non_unique
-            {
-                result.push(generate_drop_index(original_index));
-                result.push(generate_create_index(original_index));
-            }
+    result
+}
+
+fn map_columns(columns: &Vec<Column>) -> HashMap<String, Column> {
+    let mut result: HashMap<String, Column> = HashMap::new();
+
+    for column in columns {
+        result
+            .entry(column.column_name.clone())
+            .or_insert_with(|| column.clone());
+    }
+
+    result
+}
+
+fn map_indexes(indexes: &Vec<Index>) -> HashMap<String, Index> {
+    let mut result: HashMap<String, Index> = HashMap::new();
+
+    for index in indexes {
+        result
+            .entry(index.index_name.clone())
+            .or_insert_with(|| index.clone());
+    }
+
+    result
+}
+
+fn group_columns(columns: Vec<Column>) -> HashMap<String, Vec<Column>> {
+    let mut result: HashMap<String, Vec<Column>> = HashMap::new();
+
+    for column in columns {
+        let entry = result
+            .entry(column.table_name.clone())
+            .or_insert_with(Vec::new);
+        entry.push(column);
+    }
+
+    result
+}
+
+fn group_indexes(indexes: Vec<Index>) -> HashMap<String, Vec<Index>> {
+    let mut result: HashMap<String, Vec<Index>> = HashMap::new();
+
+    for index in indexes {
+        let entry = result
+            .entry(index.table_name.clone())
+            .or_insert_with(Vec::new);
+        entry.push(index);
+    }
+
+    result
+}
+
+fn compare_tables(original_tables: Vec<Table>, target_tables: Vec<Table>) -> Vec<String> {
+    let mut result: Vec<String> = Vec::new();
+
+    let original_tables = map_tables(original_tables);
+    let target_tables = map_tables(target_tables);
+
+    // Create tables
+    for (original_table_name, original_table) in &original_tables {
+        match target_tables.get(original_table_name) {
+            // Not found -> New table
+            None => result.push(generate_create_table(original_table)),
+            _ => {}
         }
     }
 
-    for (key, target_index) in &target {
-        if !original.contains_key(key) && !deleted_tables.contains(&target_index.table_name) {
-            result.push(generate_drop_index(target_index));
+    // Alter tables
+    for (original_table_name, original_table) in &original_tables {
+        match target_tables.get(original_table_name) {
+            // Same table, compare columns
+            Some(target_table) => {
+                result.extend(alter_tables(&original_table, &target_table));
+            }
+            _ => {}
+        }
+    }
+
+    // Drop tables
+    for (target_table_name, target_table) in &target_tables {
+        // Not found
+        if !original_tables.contains_key(target_table_name) {
+            // drop table
+            result.push(generate_drop_table(&target_table));
         }
     }
 
     result
 }
 
-fn generate_add_column(column: &Column) -> String {
-    format!(
-        "ALTER TABLE {} ADD COLUMN {};",
-        column.table_name,
-        generate_column(column)
-    )
+fn alter_tables(original_table: &Table, target_table: &Table) -> Vec<String> {
+    let mut result = Vec::new();
+
+    // drop index -> add column -> modify column -> drop column -> add index
+
+    let original_indexes = map_indexes(&original_table.indexes);
+    let target_indexes = map_indexes(&target_table.indexes);
+
+    let original_columns = map_columns(&original_table.columns);
+    let target_columns = map_columns(&target_table.columns);
+
+    // Drop indexes
+    for (target_index_name, target_index) in &target_indexes {
+        // Not found
+        if !original_indexes.contains_key(target_index_name) {
+            // drop index
+            result.push(generate_drop_index(target_index));
+        }
+    }
+
+    // Drop indexes
+    for (original_index_name, original_index) in &original_indexes {
+        match target_indexes.get(original_index_name) {
+            // Same index, compare index attr
+            Some(target_index) => {
+                if !index_is_same_attr(original_index, target_index) {
+                    result.push(generate_drop_index(target_index));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Add columns
+    let mut prev_column_name = String::from("");
+    // traverse by column order
+    for original_column in &original_table.columns {
+        let original_column = &original_columns.get(&original_column.column_name).unwrap();
+        match target_columns.get(&original_column.column_name) {
+            // Not found -> New column
+            None => result.push(generate_add_column(original_column, prev_column_name)),
+            _ => {}
+        }
+        prev_column_name = original_column.column_name.to_string();
+    }
+
+    // Modify columns
+    let mut prev_column_name = String::from("");
+    // traverse by column order
+    for original_column in &original_table.columns {
+        let original_column = &original_columns.get(&original_column.column_name).unwrap();
+        match target_columns.get(&original_column.column_name) {
+            // Same column, compare column attr
+            Some(target_column) => {
+                if !column_is_same_attr(original_column, target_column) {
+                    result.push(generate_modify_column(original_column, prev_column_name));
+                }
+            }
+            _ => {}
+        }
+        prev_column_name = original_column.column_name.to_string();
+    }
+
+    // Drop columns
+    for (target_column_name, target_column) in &target_columns {
+        // Not found
+        if !original_columns.contains_key(target_column_name) {
+            // drop column
+            result.push(generate_drop_column(target_column));
+        }
+    }
+
+    // Add index
+    for (original_index_name, original_index) in &original_indexes {
+        match target_indexes.get(original_index_name) {
+            // Not found -> New index
+            None => result.push(generate_add_index(original_index)),
+            // Same index, compare index attr
+            Some(target_index) => {
+                if !index_is_same_attr(original_index, target_index) {
+                    result.push(generate_add_index(original_index));
+                }
+            }
+        }
+    }
+
+    result
 }
 
-fn generate_modify_column(column: &Column) -> String {
-    format!(
-        "ALTER TABLE {} MODIFY COLUMN {};",
+fn generate_create_table(table: &Table) -> String {
+    let mut result = String::from("CREATE TABLE `");
+
+    result.push_str(&table.table_name);
+    result.push_str("`(\n");
+
+    let mut list: Vec<String> = Vec::new();
+
+    // columns
+    for (i, column) in table.columns.iter().enumerate() {
+        list.push(generate_column(&column));
+    }
+
+    // indexes
+    for (i, index) in table.indexes.iter().enumerate() {
+        let index_detail = generate_index(&index);
+        if (index_detail != "") {
+            list.push(index_detail);
+        }
+    }
+
+    result.push_str(list.join(",\n").as_str());
+
+    result.push_str(");");
+
+    result
+}
+
+fn generate_drop_table(table: &Table) -> String {
+    format!("DROP TABLE IF EXISTS `{}`;", table.table_name)
+}
+
+fn generate_add_column(column: &Column, prev_column_name: String) -> String {
+    let mut result = format!(
+        "ALTER TABLE `{}` ADD COLUMN {}",
         column.table_name,
         generate_column(column)
-    )
+    );
+
+    match prev_column_name.as_str() {
+        "" => result.push_str(&" FIRST".to_string()),
+        _ => result.push_str(&format!(" AFTER `{}`", prev_column_name)),
+    }
+
+    result.push_str(";");
+
+    result
+}
+
+fn generate_modify_column(column: &Column, prev_column_name: String) -> String {
+    let mut result = format!(
+        "ALTER TABLE `{}` MODIFY COLUMN {}",
+        column.table_name,
+        generate_column(column)
+    );
+
+    match prev_column_name.as_str() {
+        "" => result.push_str(&" FIRST".to_string()),
+        _ => result.push_str(&format!(" AFTER `{}`", prev_column_name)),
+    }
+
+    result.push_str(";");
+
+    result
 }
 
 fn generate_drop_column(column: &Column) -> String {
     format!(
-        "ALTER TABLE {} DROP COLUMN {};",
+        "ALTER TABLE `{}` DROP COLUMN `{}`;",
         column.table_name, column.column_name
     )
 }
 
 fn generate_column(column: &Column) -> String {
     format!(
-        "{} {} {} {} COMMENT '{}'",
+        "`{}` {} {} {} {} COMMENT '{}'",
         column.column_name,
         column.column_type,
         if column.is_nullable == "YES" {
@@ -243,86 +434,93 @@ fn generate_column(column: &Column) -> String {
             Some(default) => format!("DEFAULT {}", default),
             None => String::new(),
         },
+        if column.extra == "auto_increment" {
+            "PRIMARY KEY AUTO_INCREMENT"
+        } else {
+            ""
+        },
         column.column_comment
     )
 }
 
-fn generate_create_index(index: &Index) -> String {
-    if "PRIMARY" == index.index_name {
-        return format!(
-            "ALTER TABLE {} ADD PRIMARY KEY ({});",
-            index.table_name,
-            index.column_names.join(", ")
-        );
+fn generate_add_index(index: &Index) -> String {
+    let index_detail = generate_index(index);
+
+    if index_detail != "" {
+        return format!("ALTER TABLE `{}` ADD {};", index.table_name, index_detail);
     }
 
-    format!(
-        "CREATE {}INDEX {} ON {} ({});",
-        if index.non_unique { "" } else { "UNIQUE " },
-        index.index_name,
-        index.table_name,
-        index.column_names.join(", ")
-    )
+    String::new()
 }
 
 fn generate_drop_index(index: &Index) -> String {
-    format!("DROP INDEX {} ON {};", index.index_name, index.table_name)
+    format!(
+        "ALTER TABLE `{}` DROP INDEX `{}`;",
+        index.table_name, index.index_name
+    )
 }
 
-fn generate_create_table(table_name: &String, columns: &HashMap<String, Column>) -> String {
-    let mut result = String::from("CREATE TABLE ");
-    result.push_str(table_name);
-    result.push_str("(\n");
+fn generate_index(index: &Index) -> String {
+    let mut result = String::new();
 
-    for (i, (column_name, column_detail)) in columns.iter().enumerate() {
-        result.push_str(generate_column(column_detail).as_str());
-        if i < columns.len() - 1 {
-            result.push_str(",");
-        }
-        result.push_str("\n");
+    if index.index_name == "PRIMARY" && index.extra == "auto_increment" {
+        return result;
     }
 
-    result.push_str(");");
+    match index.non_unique {
+        false => match index.index_name.as_str() {
+            "PRIMARY" => result.push_str("PRIMARY KEY"),
+            _ => result.push_str(&format!("UNIQUE INDEX `{}`", index.index_name)),
+        },
+        true => result.push_str(&format!("INDEX `{}`", index.index_name)),
+    }
+
+    result.push_str(" (");
+
+    for (i, column_name) in index.column_names.iter().enumerate() {
+        result.push_str(&format!("`{}`", column_name));
+        if i < index.column_names.iter().len() - 1 {
+            result.push_str(",");
+        }
+    }
+
+    result.push_str(") ");
+
+    result.push_str(&format!("USING {}", index.index_type));
 
     result
 }
 
-fn compare_column_attr(original_column: &Column, target_column: &Column) -> bool {
+fn column_is_same_attr(original_column: &Column, target_column: &Column) -> bool {
     original_column.column_type == target_column.column_type
         && original_column.is_nullable == target_column.is_nullable
         && original_column.column_default == target_column.column_default
+        && original_column.extra == target_column.extra
         && original_column.column_comment == target_column.column_comment
 }
 
-// HashMap<Table Name, HashMap<Column Name, Column>>
-fn group_column_by_table(columns: &Vec<Column>) -> HashMap<String, HashMap<String, Column>> {
-    let mut result: HashMap<String, HashMap<String, Column>> = HashMap::new();
-
-    for column in columns {
-        let entry = result
-            .entry(column.table_name.clone())
-            .or_insert_with(HashMap::new);
-        entry.insert(column.column_name.clone(), column.clone());
-    }
-
-    result
-}
-
-fn group_index_by_table_index(indexes: &Vec<Index>) -> HashMap<(String, String), Index> {
-    indexes
-        .iter()
-        .map(|index| {
-            (
-                (index.table_name.clone(), index.index_name.clone()),
-                index.clone(),
-            )
-        })
-        .collect()
+fn index_is_same_attr(original_index: &Index, target_index: &Index) -> bool {
+    original_index.non_unique == target_index.non_unique
+        && original_index.column_names == target_index.column_names
+        && original_index.index_type == target_index.index_type
 }
 
 #[tokio::main]
 async fn main() {
-    let args = DbConfig::parse();
+    // let args = DbConfig::parse();
+    let args = DbConfig {
+        original_user: String::from("root"),
+        original_password: String::from("123456"),
+        original_host: String::from("127.0.0.1"),
+        original_port: String::from("3306"),
+        original_schema: String::from("a_schema"),
+
+        target_user: String::from("root"),
+        target_password: String::from("123456"),
+        target_host: String::from("127.0.0.1"),
+        target_port: String::from("3306"),
+        target_schema: String::from("b_schema"),
+    };
 
     let original_pool = MySqlPool::connect(
         format!(
@@ -352,25 +550,15 @@ async fn main() {
     .await
     .unwrap();
 
-    let original_columns = get_columns(&original_pool, &args.original_schema).await;
-    let target_columns = get_columns(&target_pool, &args.target_schema).await;
+    let original_tables: Vec<Table> = get_tables(&original_pool, &args.original_schema).await;
+    let target_tables = get_tables(&target_pool, &args.target_schema).await;
 
-    let mut column_result = compare_columns(&original_columns, &target_columns);
+    let ddl_statements = compare_tables(original_tables, target_tables);
 
-    let original_indexes = get_indexes(&original_pool, &args.original_schema).await;
-    let target_indexes = get_indexes(&target_pool, &args.target_schema).await;
-
-    column_result.ddl_statements.extend(compare_indexes(
-        &original_indexes,
-        &target_indexes,
-        &column_result.deleted_tables,
-    ));
-
-    if column_result.ddl_statements.len() > 0 {
+    if ddl_statements.len() > 0 {
         println!("use {};", &args.target_schema);
-    }
-
-    for ddl in column_result.ddl_statements {
-        println!("{}", ddl);
+        for ddl in ddl_statements {
+            println!("{}", ddl);
+        }
     }
 }
