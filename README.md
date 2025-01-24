@@ -59,25 +59,32 @@ create database a_schema;
 
 use a_schema;
 
-create table user
-(
-    id      bigint primary key auto_increment comment '主键',
-    name    varchar(30) null comment '姓名',
-    address varchar(50) null comment '地址',
-    number  varchar(20) null comment '编号',
-    height  float       null comment '身高'
+create table user (
+                      id bigint comment '主键',
+                      name varchar(30) null comment '姓名',
+                      address varchar(50) null comment '地址',
+                      number varchar(20) null comment '编号',
+                      height float null comment '身高'
 );
 
-create index idx_name on user (name);
+create table teacher (
+                         name varchar(30) null comment '姓名'
+);
 
-create index idx_multiple_field on user (name, address);
+create index idx_name on user(name);
 
-create table course
-(
-    id      bigint primary key auto_increment comment '主键',
-    name    varchar(30) null comment '课程名称',
-    teacher varchar(30) null comment '教师',
-    credit  float       null comment '学分'
+create index idx_multiple_field on user(name, address);
+
+create table course (
+                        id      bigint primary key auto_increment comment '主键',
+                        name    varchar(30) null comment '课程名称',
+                        teacher varchar(30) null comment '教师',
+                        credit  float       null comment '学分'
+);
+
+create table pig (
+                     id bigint not null comment '名称',
+                     weight bigint not null comment '重量'
 );
 ```
 
@@ -91,25 +98,32 @@ create database b_schema;
 
 use b_schema;
 
-create table user
-(
-    id      bigint primary key auto_increment comment '主键',
-    name    varchar(30) null comment '姓名',
-    address varchar(50) null comment '地址',
-    number  varchar(20) null comment '编号',
-    height  float       null comment '身高'
+create table user (
+                      id bigint comment '主键',
+                      name varchar(30) null comment '姓名',
+                      address varchar(50) null comment '地址',
+                      number varchar(20) null comment '编号',
+                      height float null comment '身高'
 );
 
-create index idx_name on user (name);
+create table teacher (
+                         name varchar(30) null comment '姓名'
+);
 
-create index idx_multiple_field on user (name, address);
+create index idx_name on user(name);
 
-create table course
-(
-    id      bigint primary key auto_increment comment '主键',
-    name    varchar(30) null comment '课程名称',
-    teacher varchar(30) null comment '教师',
-    credit  float       null comment '学分'
+create index idx_multiple_field on user(name, address);
+
+create table course (
+                        id      bigint primary key auto_increment comment '主键',
+                        name    varchar(30) null comment '课程名称',
+                        teacher varchar(30) null comment '教师',
+                        credit  float       null comment '学分'
+);
+
+create table pig (
+                     id bigint not null comment '名称',
+                     weight bigint not null comment '重量'
 );
 ```
 
@@ -117,6 +131,7 @@ create table course
 
 ```mysql
 use a_schema;
+alter table user modify column id bigint primary key auto_increment not null comment '主键';
 alter table user add column age int null comment '年龄';
 alter table user add column create_time datetime not null default current_timestamp comment '创建时间';
 alter table user modify column address varchar(100) not null comment '地址';
@@ -133,6 +148,11 @@ create unique index uk_no on student(no);
 drop index idx_multiple_field on user;
 create index idx_multiple_field on user(name, phone);
 drop table course;
+alter table user add unique index uk_test(age, create_time);
+alter table student add index idx_name(name);
+alter table teacher add COLUMN `id` bigint NOT NULL primary key AUTO_INCREMENT COMMENT '主键' FIRST;
+alter table pig add unique index uk_id_weight(id, weight);
+alter table pig modify column id bigint not null primary key auto_increment comment '名称';
 ```
 
 ### Run the program
@@ -145,24 +165,32 @@ Output the following:
 
 ```mysql
 use b_schema;
-CREATE TABLE student(
-                        id bigint NOT NULL  COMMENT '主键',
-                        name varchar(30) NULL  COMMENT '姓名',
-                        no varchar(30) NULL  COMMENT '学号'
-);
-ALTER TABLE user MODIFY COLUMN address varchar(100) NOT NULL  COMMENT '地址';
-ALTER TABLE user ADD COLUMN age int NULL  COMMENT '年龄';
-ALTER TABLE user ADD COLUMN create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间';
-ALTER TABLE user ADD COLUMN phone varchar(20) NULL  COMMENT '电话号码';
-ALTER TABLE user DROP COLUMN number;
-ALTER TABLE user DROP COLUMN height;
-DROP TABLE course;
-ALTER TABLE student ADD PRIMARY KEY (id);
-DROP INDEX idx_multiple_field ON user;
-CREATE INDEX idx_multiple_field ON user (name, phone);
-CREATE UNIQUE INDEX uk_phone ON user (phone);
-CREATE UNIQUE INDEX uk_no ON student (no);
-DROP INDEX idx_name ON user;
+CREATE TABLE `student`(
+                          `id` bigint NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
+                          `no` varchar(30) NULL   COMMENT '学号',
+                          `name` varchar(30) NULL   COMMENT '姓名',
+                          UNIQUE INDEX `uk_no` (`no`) USING BTREE,
+                          INDEX `idx_name` (`name`) USING BTREE);
+
+ALTER TABLE `user` DROP INDEX `idx_name`;
+ALTER TABLE `user` DROP INDEX `idx_multiple_field`;
+ALTER TABLE `user` ADD COLUMN `phone` varchar(20) NULL   COMMENT '电话号码' AFTER `address`;
+ALTER TABLE `user` ADD COLUMN `age` int NULL   COMMENT '年龄' AFTER `phone`;
+ALTER TABLE `user` ADD COLUMN `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP  COMMENT '创建时间' AFTER `age`;
+ALTER TABLE `user` MODIFY COLUMN `id` bigint NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键' FIRST;
+ALTER TABLE `user` MODIFY COLUMN `address` varchar(100) NOT NULL   COMMENT '地址' AFTER `name`;
+ALTER TABLE `user` DROP COLUMN `number`;
+ALTER TABLE `user` DROP COLUMN `height`;
+ALTER TABLE `user` ADD UNIQUE INDEX `uk_test` (`age`,`create_time`) USING BTREE;
+ALTER TABLE `user` ADD INDEX `idx_multiple_field` (`name`,`phone`) USING BTREE;
+ALTER TABLE `user` ADD UNIQUE INDEX `uk_phone` (`phone`) USING BTREE;
+
+ALTER TABLE `teacher` ADD COLUMN `id` bigint NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键' FIRST;
+
+ALTER TABLE `pig` MODIFY COLUMN `id` bigint NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '名称' FIRST;
+ALTER TABLE `pig` ADD UNIQUE INDEX `uk_id_weight` (`id`,`weight`) USING BTREE;
+
+DROP TABLE IF EXISTS `course`;
 ```
 
 ## Note
