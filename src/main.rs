@@ -159,39 +159,24 @@ async fn get_tables(pool: &MySqlPool, schema: &str) -> Vec<Table> {
 }
 
 fn map_tables(tables: Vec<Table>) -> HashMap<String, Table> {
-    let mut result: HashMap<String, Table> = HashMap::new();
-
-    for table in tables {
-        result
-            .entry(table.table_name.clone())
-            .or_insert_with(|| table);
-    }
-
-    result
+    tables
+        .into_iter()
+        .map(|t| (t.table_name.clone(), t))
+        .collect()
 }
 
 fn map_columns(columns: &Vec<Column>) -> HashMap<String, Column> {
-    let mut result: HashMap<String, Column> = HashMap::new();
-
-    for column in columns {
-        result
-            .entry(column.column_name.clone())
-            .or_insert_with(|| column.clone());
-    }
-
-    result
+    columns
+        .into_iter()
+        .map(|c| (c.column_name.clone(), c.clone()))
+        .collect()
 }
 
 fn map_indexes(indexes: &Vec<Index>) -> HashMap<String, Index> {
-    let mut result: HashMap<String, Index> = HashMap::new();
-
-    for index in indexes {
-        result
-            .entry(index.index_name.clone())
-            .or_insert_with(|| index.clone());
-    }
-
-    result
+    indexes
+        .into_iter()
+        .map(|i| (i.index_name.clone(), i.clone()))
+        .collect()
 }
 
 fn group_columns(columns: Vec<Column>) -> HashMap<String, Vec<Column>> {
