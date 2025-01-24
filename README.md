@@ -2,7 +2,7 @@ A tool to compare two databases and generate a diff for MySQL.
 
 ## Install
 
-### Cargo
+### Use Cargo
 
 ```bash
 $ cargo install ddl-diff
