@@ -1,6 +1,6 @@
 [package]
 name = "ddl-diff"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "A tool to compare two databases and generate a diff for MySQL."
 license = "MIT"
