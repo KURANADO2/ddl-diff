@@ -59,8 +59,6 @@ struct Index {
     extra: String,
 }
 
-struct AutoIncrementColumn {}
-
 async fn get_columns(pool: &MySqlPool, schema: &str) -> Vec<Column> {
     let query = format!(
         "SELECT
@@ -341,14 +339,14 @@ fn generate_create_table(table: &Table) -> String {
     let mut list: Vec<String> = Vec::new();
 
     // columns
-    for (i, column) in table.columns.iter().enumerate() {
+    for column in table.columns.iter() {
         list.push(generate_column(&column));
     }
 
     // indexes
-    for (i, index) in table.indexes.iter().enumerate() {
+    for index in table.indexes.iter() {
         let index_detail = generate_index(&index);
-        if (index_detail != "") {
+        if index_detail != "" {
             list.push(index_detail);
         }
     }
@@ -492,20 +490,7 @@ fn index_is_same_attr(original_index: &Index, target_index: &Index) -> bool {
 
 #[tokio::main]
 async fn main() {
-    // let args = DbConfig::parse();
-    let args = DbConfig {
-        original_user: String::from("root"),
-        original_password: String::from("123456"),
-        original_host: String::from("127.0.0.1"),
-        original_port: String::from("3306"),
-        original_schema: String::from("a_schema"),
-
-        target_user: String::from("root"),
-        target_password: String::from("123456"),
-        target_host: String::from("127.0.0.1"),
-        target_port: String::from("3306"),
-        target_schema: String::from("b_schema"),
-    };
+    let args = DbConfig::parse();
 
     let original_pool = MySqlPool::connect(
         format!(
