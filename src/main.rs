@@ -1,63 +1,12 @@
+mod options;
+mod table;
+
+use crate::options::DbConfig;
+use crate::table::{Column, Index, Table};
 use clap::Parser;
-use serde::Serialize;
 use sqlx::mysql::MySqlPool;
 use sqlx::Row;
 use std::collections::HashMap;
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct DbConfig {
-    #[arg(long)]
-    original_user: String,
-    #[arg(long)]
-    original_password: String,
-    #[arg(long)]
-    original_host: String,
-    #[arg(long, default_value = "3306")]
-    original_port: String,
-    #[arg(long)]
-    original_schema: String,
-
-    #[arg(long)]
-    target_user: String,
-    #[arg(long)]
-    target_password: String,
-    #[arg(long)]
-    target_host: String,
-    #[arg(long, default_value = "3306")]
-    target_port: String,
-    #[arg(long)]
-    target_schema: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct Table {
-    table_name: String,
-    columns: Vec<Column>,
-    indexes: Vec<Index>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
-struct Column {
-    table_name: String,
-    column_name: String,
-    original_position: u8,
-    column_default: Option<String>,
-    is_nullable: String,
-    column_type: String,
-    extra: String,
-    column_comment: String,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
-struct Index {
-    table_name: String,
-    index_name: String,
-    non_unique: bool,
-    column_names: Vec<String>,
-    index_type: String,
-    extra: String,
-}
 
 async fn get_columns(pool: &MySqlPool, schema: &str) -> Vec<Column> {
     let query = format!(
@@ -147,7 +96,7 @@ async fn get_tables(pool: &MySqlPool, schema: &str) -> Vec<Table> {
     for (table_name, columns) in columns {
         let indexes = indexes.get(&table_name).unwrap_or(&Vec::new()).clone();
         result.push(Table {
-            table_name,
+            table_name: table_name.clone(),
             columns,
             indexes,
         });
@@ -520,7 +469,7 @@ async fn main() {
     .await
     .unwrap();
 
-    let original_tables: Vec<Table> = get_tables(&original_pool, &args.original_schema).await;
+    let original_tables = get_tables(&original_pool, &args.original_schema).await;
     let target_tables = get_tables(&target_pool, &args.target_schema).await;
 
     let ddl_statements = compare_tables(original_tables, target_tables);
