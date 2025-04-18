@@ -96,6 +96,10 @@ create table pig (
                      id bigint not null comment '名称',
                      weight bigint not null comment '重量'
 );
+
+create table bird (
+                      id bigint primary key not null comment 'id'
+);
 ```
 
 ### create b_schema
@@ -135,6 +139,10 @@ create table pig (
                      id bigint not null comment '名称',
                      weight bigint not null comment '重量'
 );
+
+create table bird (
+                      id bigint primary key not null comment 'id'
+);
 ```
 
 ### make the difference between a_schema and b_schema
@@ -163,6 +171,7 @@ alter table student add index idx_name(name);
 alter table teacher add COLUMN `id` bigint NOT NULL primary key AUTO_INCREMENT COMMENT '主键' FIRST;
 alter table pig add unique index uk_id_weight(id, weight);
 alter table pig modify column id bigint not null primary key auto_increment comment '名称';
+alter table bird modify column id bigint not null auto_increment comment 'id';
 ```
 
 ### Run the program
@@ -185,27 +194,28 @@ Output the following:
 use b_schema;
 CREATE TABLE `student`(
                           `id` bigint(20) NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
-                          `no` varchar(30) NULL DEFAULT NULL  COMMENT '学号',
-                          `name` varchar(30) NULL DEFAULT NULL  COMMENT '姓名',
+                          `no` varchar(30) NULL DEFAULT NULL   COMMENT '学号',
+                          `name` varchar(30) NULL DEFAULT NULL   COMMENT '姓名',
                           INDEX `idx_name` (`name`) USING BTREE,
                           UNIQUE INDEX `uk_no` (`no`) USING BTREE);
+ALTER TABLE `teacher` ADD COLUMN `id` bigint(20) NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键' FIRST;
+
+ALTER TABLE `bird` MODIFY COLUMN `id` bigint(20) NOT NULL   AUTO_INCREMENT COMMENT 'id' FIRST;
 ALTER TABLE `user` DROP INDEX `idx_name`;
 ALTER TABLE `user` DROP INDEX `idx_multiple_field`;
-ALTER TABLE `user` ADD COLUMN `phone` varchar(20) NULL DEFAULT NULL  COMMENT '电话号码' AFTER `address`;
-ALTER TABLE `user` ADD COLUMN `age` int(11) NULL DEFAULT 18  COMMENT '年龄' AFTER `phone`;
-ALTER TABLE `user` ADD COLUMN `create_time` datetime NOT NULL DEFAULT current_timestamp()  COMMENT '创建时间' AFTER `age`;
+ALTER TABLE `user` ADD COLUMN `phone` varchar(20) NULL DEFAULT NULL   COMMENT '电话号码' AFTER `address`;
+ALTER TABLE `user` ADD COLUMN `age` int(11) NULL DEFAULT 18   COMMENT '年龄' AFTER `phone`;
+ALTER TABLE `user` ADD COLUMN `create_time` datetime NOT NULL DEFAULT current_timestamp()   COMMENT '创建时间' AFTER `age`;
 ALTER TABLE `user` MODIFY COLUMN `id` bigint(20) NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键' FIRST;
-ALTER TABLE `user` MODIFY COLUMN `address` varchar(100) NOT NULL DEFAULT 'Shanghai'  COMMENT '地址' AFTER `name`;
+ALTER TABLE `user` MODIFY COLUMN `address` varchar(100) NOT NULL DEFAULT 'Shanghai'   COMMENT '地址' AFTER `name`;
 ALTER TABLE `user` DROP COLUMN `height`;
 ALTER TABLE `user` DROP COLUMN `number`;
-ALTER TABLE `user` ADD INDEX `idx_multiple_field` (`name`,`phone`) USING BTREE;
 ALTER TABLE `user` ADD UNIQUE INDEX `uk_test` (`age`,`create_time`) USING BTREE;
-
 ALTER TABLE `user` ADD UNIQUE INDEX `uk_phone` (`phone`) USING BTREE;
-ALTER TABLE `pig` MODIFY COLUMN `id` bigint(20) NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '名称' FIRST;
+ALTER TABLE `user` ADD INDEX `idx_multiple_field` (`name`,`phone`) USING BTREE;
 
+ALTER TABLE `pig` MODIFY COLUMN `id` bigint(20) NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '名称' FIRST;
 ALTER TABLE `pig` ADD UNIQUE INDEX `uk_id_weight` (`id`,`weight`) USING BTREE;
-ALTER TABLE `teacher` ADD COLUMN `id` bigint(20) NOT NULL  PRIMARY KEY AUTO_INCREMENT COMMENT '主键' FIRST;
 
 DROP TABLE IF EXISTS `course`;
 ```
