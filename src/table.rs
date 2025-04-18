@@ -17,6 +17,7 @@ pub struct Column {
     pub column_type: String,
     pub extra: String,
     pub column_comment: String,
+    pub is_primary_key: bool,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]

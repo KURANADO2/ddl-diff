@@ -11,16 +11,28 @@ use std::collections::HashMap;
 async fn get_columns(pool: &MySqlPool, schema: &str) -> Vec<Column> {
     let query = format!(
         "SELECT
-         TABLE_NAME AS table_name,
-         COLUMN_NAME AS column_name,
-         ORDINAL_POSITION AS original_position,
-         CAST(COLUMN_DEFAULT AS CHAR) AS column_default,
-         IS_NULLABLE AS is_nullable,
-         CAST(COLUMN_TYPE AS CHAR) AS column_type,
-         EXTRA AS extra,
-         CAST(COLUMN_COMMENT AS CHAR) AS column_comment
-         FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = '{}' ORDER BY TABLE_NAME, ORDINAL_POSITION;",
+        t1.TABLE_NAME AS table_name,
+        t1.COLUMN_NAME AS column_name,
+        t1.ORDINAL_POSITION AS original_position,
+        CAST(t1.COLUMN_DEFAULT AS CHAR) AS column_default,
+        t1.IS_NULLABLE AS is_nullable,
+        CAST(t1.COLUMN_TYPE AS CHAR) AS column_type,
+        t1.EXTRA AS extra,
+        CAST(t1.COLUMN_COMMENT AS CHAR) AS column_comment,
+        CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM INFORMATION_SCHEMA.STATISTICS s
+                WHERE s.TABLE_SCHEMA = t1.TABLE_SCHEMA
+                  AND s.TABLE_NAME = t1.TABLE_NAME
+                  AND s.COLUMN_NAME = t1.COLUMN_NAME
+                  AND s.INDEX_NAME = 'PRIMARY'
+            ) THEN TRUE
+            ELSE FALSE
+        END AS is_primary_key
+        FROM INFORMATION_SCHEMA.COLUMNS t1
+        WHERE t1.TABLE_SCHEMA = '{}'
+        ORDER BY t1.TABLE_NAME, t1.ORDINAL_POSITION;",
         schema
     );
 
@@ -245,7 +257,11 @@ fn alter_tables(original_table: &Table, target_table: &Table) -> Vec<String> {
             // Same column, compare column attr
             Some(target_column) => {
                 if !column_is_same_attr(original_column, target_column) {
-                    result.push(generate_modify_column(original_column, prev_column_name));
+                    result.push(generate_modify_column(
+                        original_column,
+                        prev_column_name,
+                        target_column.is_primary_key,
+                    ));
                 }
             }
             _ => {}
@@ -289,7 +305,7 @@ fn generate_create_table(table: &Table) -> String {
 
     // columns
     for column in table.columns.iter() {
-        list.push(generate_column(&column));
+        list.push(generate_column(&column, false));
     }
 
     // indexes
@@ -315,7 +331,7 @@ fn generate_add_column(column: &Column, prev_column_name: String) -> String {
     let mut result = format!(
         "ALTER TABLE `{}` ADD COLUMN {}",
         column.table_name,
-        generate_column(column)
+        generate_column(column, false)
     );
 
     match prev_column_name.as_str() {
@@ -328,11 +344,15 @@ fn generate_add_column(column: &Column, prev_column_name: String) -> String {
     result
 }
 
-fn generate_modify_column(column: &Column, prev_column_name: String) -> String {
+fn generate_modify_column(
+    column: &Column,
+    prev_column_name: String,
+    target_is_primary_key: bool,
+) -> String {
     let mut result = format!(
         "ALTER TABLE `{}` MODIFY COLUMN {}",
         column.table_name,
-        generate_column(column)
+        generate_column(column, target_is_primary_key)
     );
 
     match prev_column_name.as_str() {
@@ -352,9 +372,9 @@ fn generate_drop_column(column: &Column) -> String {
     )
 }
 
-fn generate_column(column: &Column) -> String {
+fn generate_column(column: &Column, target_is_primary_key: bool) -> String {
     format!(
-        "`{}` {} {} {} {} COMMENT '{}'",
+        "`{}` {} {} {} {} {} COMMENT '{}'",
         column.column_name,
         column.column_type,
         if column.is_nullable == "YES" {
@@ -366,8 +386,13 @@ fn generate_column(column: &Column) -> String {
             Some(default) => format!("DEFAULT {}", default),
             None => String::new(),
         },
+        if column.is_primary_key && !target_is_primary_key {
+            "PRIMARY KEY"
+        } else {
+            ""
+        },
         if column.extra == "auto_increment" {
-            "PRIMARY KEY AUTO_INCREMENT"
+            "AUTO_INCREMENT"
         } else {
             ""
         },
