@@ -2,10 +2,16 @@ A tool to compare two databases and generate a diff for MariaDB.
 
 ## Install
 
-### Use Cargo
+### Use [Cargo](https://www.rust-lang.org/tools/install)
 
 ```bash
-$ cargo install ddl-diff
+cargo install ddl-diff
+```
+
+### Use Homebrew
+
+```bash
+brew install KURANADO2/ddl-diff/ddl-diff
 ```
 
 ### From Source
